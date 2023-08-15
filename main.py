@@ -30,16 +30,7 @@ class VoiceToTextBot:
 
     def convert_ogg_to_mp3(self, input_file):
         '''convert an ogg-file to mp3 with ffmpeg'''
-        # out_put = (
-        #     ffmpeg.input(input_file)
-        #     .output('v_message.wav', format='wav', acodec='pcm_s16le', ac=1, ar='8k')
-        #     .overwrite_output()
-        #     .run()
-        # )
-        # return out_put
-
-    # return out_put
-    process = subprocess.run(['ffmpeg', '-i',
+        process = subprocess.run(['ffmpeg', '-i',
                               'input_file', '-c:a',
                               'libmp3lame', '-q:a', '2', 'output_file'])
    
@@ -51,10 +42,7 @@ def run_bot(self):
 
 if __name__ == '__main__':
     API_token = 'text_token'
-
     ogg_file = 'file_path'
-   
-
     bot = VoiceToTextBot(API_token, ogg_file)
     bot.run_bot()
 
