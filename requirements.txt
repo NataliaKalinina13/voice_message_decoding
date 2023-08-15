@@ -1,0 +1,5 @@
+ffmpeg==1.4
+pyTelegramBotAPI==4.12.0
+Requests==2.31.0
+future==0.18.3
+openai==0.27.8
