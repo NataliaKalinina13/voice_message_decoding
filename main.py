@@ -82,8 +82,8 @@ class VoiceToTextBot:
 
 
 if __name__ == '__main__':
-    API_token = '6106303194:AAExMxe7GqUM1IdDE25PAU6SdTSagF4o3K4'
-    openai.api_key = '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'
+    API_token = 'TOKEN'
+    openai.api_key = 'KEY
 
     bot = VoiceToTextBot(API_token, openai.api_key)
     bot.run_bot()
