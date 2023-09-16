@@ -2,59 +2,88 @@ import telebot
 import requests
 import openai
 import os
-import subprocess
+import time
 
 
 class VoiceToTextBot:
+    TEMP_FILE_DIR = "/var/cache/voice_message_decoding/"
+    MAX_REQUEST = 3
+
     def __init__(self, api_token, openai_key):
         self.API_token = api_token
         self.bot = telebot.TeleBot(self.API_token)
         self.openai_key = openai_key
+        self.last_request_time = 0
+        self.request_amount = 0
 
-        @self.bot.message_handler(content_types=['text'])
-        def start(message):
-            '''output a greeting'''
-            message_with_user_name = f'Привет, <b>{message.from_user.first_name}</b>. Я бот для расшифровки ' \
-                                     f'твоих голосовых сообщений. Отправь мне любую голосовуху.'
-            self.bot.send_message(message.chat.id, message_with_user_name, parse_mode='html')
+        try:
+            os.mkdir("/var/cache/voice_message_decoding")
+        except FileExistsError:
+            pass
 
-        @self.bot.message_handler(content_types=['voice'])
+        @self.bot.message_handler(content_types=['voice', 'video_note'])
         def get_audio_file(message):
-            '''get an audio file from a user and save it as a temp.file,
-            convert it into wav-format, get a transcription and send it back'''
-            file_info = self.bot.get_file(message.voice.file_id)
-            file = requests.get('https://api.telegram.org/file/bot{0}/{1}'.format(api_token, file_info.file_path))
+            start = time.time()
 
-            with open('v_message.ogg', 'wb') as file_object:
+            if start - self.last_request_time <= 60:
+                self.request_amount = 0
+            else:
+                self.request_amount += 1
+                if self.request_amount >= self.MAX_REQUEST:
+                    time_to_sleep = int(self.last_request_time + 60 - start)
+                    if time_to_sleep > 0:
+                        time.sleep(time_to_sleep)
+                    else:
+                        self.request_amount = 0
+                        self.last_request_time = start
+
+            if message.content_type == 'voice':
+                file_info = self.bot.get_file(message.voice.file_id)
+            else:
+                file_info = self.bot.get_file(message.video_note.file_id)
+            filename = f'{message.content_type}_{start}'
+            new_filename = f'{filename}.wav'
+            file = self.request_to_api(api_token, file_info.file_path, 5)
+            if file == False:
+                return file
+
+            with open(f'{self.TEMP_FILE_DIR}{filename}', 'wb') as file_object:
                 file_object.write(file.content)
 
-            text = self.transcribe_file(message)
+            if self.convert_to_mp3(filename, new_filename) != 0:
+                return False
 
-            return text
+            with open(f'{self.TEMP_FILE_DIR}{new_filename}', "rb") as open_file:
+                transcript = openai.Audio.transcribe("whisper-1", open_file)
+            os.remove(f'{self.TEMP_FILE_DIR}{new_filename}')
 
-    def convert_ogg_to_mp3(self, input_file='v_message.ogg', output_file='v_message.wav'):
-        '''convert an ogg-file to wav-format with ffmpeg'''
-        process = subprocess.run(['ffmpeg', '-i', input_file, output_file])
+            self.bot.reply_to(message, transcript['text'])
+            self.request_count += 1
+            self.last_request_time = time.time()
 
-        return os.remove(input_file)
-
-    def transcribe_file(self, message):
-        '''get a file transcription with the help of Whisper'''
-        wav_file = self.convert_ogg_to_mp3()
-        audio_file = open('v_message.wav', "rb")
-        transcript = openai.Audio.transcribe("whisper-1", audio_file)
-        os.remove('v_message.wav')
-
-        self.bot.reply_to(message, transcript['text'])
+    def convert_to_mp3(self, input_file, output_file):
+        res = os.system(f"ffmpeg -y -i {self.TEMP_FILE_DIR}{input_file} {self.TEMP_FILE_DIR}{output_file} 2>/dev/null")
+        if res != 0:
+            print(f"ERROR: ffmpeg exited with code [{res}]. \n Input file: {input_file} \n Output file {output_file}")
+        os.remove(f'{self.TEMP_FILE_DIR}{input_file}')
+        return res
 
     def run_bot(self):
         '''launch a bot'''
         self.bot.polling(none_stop=True)
 
+    def request_to_api(self, token, file_path, count=5):
+        for _ in range(0, count):
+            file = requests.get('https://api.telegram.org/file/bot{0}/{1}'.format(token, file_path))
+            if file.status_code == 200:
+                return file
+            time.sleep(0.2)
+        return False
+
 
 if __name__ == '__main__':
-    API_token = 'token_text'
-    openai.api_key = 'key_text'
+    API_token = 'TOKEN'
+    openai.api_key = 'KEY'
 
     bot = VoiceToTextBot(API_token, openai.api_key)
     bot.run_bot()
