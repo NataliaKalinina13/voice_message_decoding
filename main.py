@@ -83,7 +83,7 @@ class VoiceToTextBot:
 
 if __name__ == '__main__':
     API_token = 'TOKEN'
-    openai.api_key = 'KEY
+    openai.api_key = 'KEY'
 
     bot = VoiceToTextBot(API_token, openai.api_key)
     bot.run_bot()
